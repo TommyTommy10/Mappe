@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="logo.png" type="image/png">
     <title>GeoMaster Pro - Quiz Interattivo</title>
+    <!-- Favicon link -->
+    <link rel="icon" href="favicon.png" type="image/png">
+    
     <style>
         :root {
             --primary: #2563eb;
@@ -27,7 +29,7 @@
             padding-bottom: 50px;
         }
 
-        /* Banner Superiore */
+        /* Banner Superiore Fisso */
         #top-banner {
             position: sticky;
             top: 0;
@@ -129,20 +131,23 @@
 <body>
 
     <div id="top-banner">
-        <div id="status-msg">GeoMaster Pro: Carica una mappa o un template</div>
+        <div id="status-msg">GeoMaster Pro: Carica un'immagine o una sessione</div>
         <div id="stats" class="hidden">Punteggio: 0/0 | Tempo: 0s</div>
     </div>
 
     <div class="container-ui">
         <div class="button-group">
+            <!-- CARICAMENTO BASE -->
             <input type="file" id="file-map" accept="image/*" class="hidden">
             <button class="btn-outline" onclick="document.getElementById('file-map').click()">📁 Carica Immagine</button>
             <button class="btn-outline" id="btn-template">✨ Carica Template (JSON)</button>
             
-            <button class="btn-black hidden action-btn" id="btn-save">💾 Salva Sessione</button>
+            <!-- GESTIONE SESSIONE -->
             <input type="file" id="file-session" accept=".json" class="hidden">
-            <button class="btn-outline action-btn hidden" onclick="document.getElementById('file-session').click()">📂 Apri Sessione</button>
+            <button class="btn-outline" id="btn-open-session" onclick="document.getElementById('file-session').click()">📂 Apri Sessione</button>
+            <button class="btn-black hidden action-btn" id="btn-save">💾 Salva Sessione</button>
             
+            <!-- MODALITÀ QUIZ -->
             <button class="btn-blue hidden action-btn" id="btn-quiz-click">📍 Quiz: Clicca</button>
             <button class="btn-purple hidden action-btn" id="btn-quiz-write">✍️ Quiz: Scrivi</button>
             <button class="btn-red" onclick="location.reload()">🔄 Reset</button>
@@ -178,7 +183,7 @@
             btns: document.querySelectorAll('.action-btn')
         };
 
-        // --- CARICAMENTO ---
+        // --- CARICAMENTO IMMAGINE SINGOLA ---
         document.getElementById('file-map').onchange = (e) => {
             const file = e.target.files[0];
             if (file) {
@@ -186,12 +191,14 @@
                 reader.onload = (ev) => {
                     el.mapImg.src = ev.target.result;
                     initView();
+                    clearMarkers();
+                    updateMsg("Editor: Clicca sulla mappa per aggiungere punti.", "white");
                 };
                 reader.readAsDataURL(file);
             }
         };
 
-        // Caricamento Template Esterno
+        // --- CARICAMENTO TEMPLATE (DA GITHUB) ---
         document.getElementById('btn-template').onclick = () => {
             fetch('template.json')
                 .then(response => {
@@ -199,10 +206,7 @@
                     return response.json();
                 })
                 .then(data => {
-                    el.mapImg.src = data.image;
-                    initView();
-                    clearMarkers();
-                    data.points.forEach(p => createMarker(p.x, p.y, p.label));
+                    loadFromJSON(data);
                     updateMsg("Template caricato con successo!", "white");
                 })
                 .catch(err => {
@@ -210,11 +214,42 @@
                 });
         };
 
+        // --- APRI SESSIONE (DA FILE LOCALE) ---
+        document.getElementById('file-session').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    loadFromJSON(data);
+                    updateMsg("Sessione caricata correttamente!", "white");
+                } catch(err) {
+                    updateMsg("Errore nel formato del file JSON.", "#ef4444");
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        function loadFromJSON(data) {
+            if (!data.image) {
+                updateMsg("Errore: Il file JSON non contiene un'immagine.", "#ef4444");
+                return;
+            }
+            el.mapImg.src = data.image;
+            initView();
+            clearMarkers();
+            if (data.points) {
+                data.points.forEach(p => createMarker(p.x, p.y, p.label));
+            }
+        }
+
         function initView() {
             el.mapCont.classList.remove('hidden');
             el.btns.forEach(b => b.classList.remove('hidden'));
-            el.msg.innerText = "Editor: Clicca sulla mappa per aggiungere o eliminare punti.";
             isQuiz = false;
+            el.stats.classList.add('hidden');
+            el.inputArea.style.display = 'none';
         }
 
         function clearMarkers() {
@@ -269,7 +304,7 @@
             el.mapCont.appendChild(dot);
         }
 
-        // --- LOGICA QUIZ (MODALITÀ VERIFICA) ---
+        // --- LOGICA QUIZ ---
         document.getElementById('btn-quiz-click').onclick = () => startQuiz('click');
         document.getElementById('btn-quiz-write').onclick = () => startQuiz('write');
 
@@ -319,9 +354,8 @@
                 clickedObj.el.className = 'dot correct';
                 updateMsg("Corretto!", "#10b981");
             } else {
-                // In modalità verifica, se sbagli quello cercato viene segnato come errore
                 currentTarget.el.className = 'dot wrong';
-                updateMsg(`Errore! Hai cliccato il punto sbagliato.`, "#ef4444");
+                updateMsg(`Sbagliato! Era: ${currentTarget.label}`, "#ef4444");
             }
             
             currentTarget.done = true;
@@ -379,7 +413,7 @@
             updateMsg(`Quiz Completato! Voto: ${score}/${markers.length} | Tempo: ${finalSec}s`, "white");
         }
 
-        // --- SALVATAGGIO / APERTURA SESSIONE (PNG + JSON INSIEME) ---
+        // --- SALVATAGGIO SESSIONE ---
         document.getElementById('btn-save').onclick = () => {
             const sessionData = {
                 image: el.mapImg.src,
@@ -391,20 +425,6 @@
             a.href = url;
             a.download = "sessione_mappa.json";
             a.click();
-        };
-
-        document.getElementById('file-session').onchange = (e) => {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const data = JSON.parse(ev.target.result);
-                el.mapImg.src = data.image;
-                initView();
-                clearMarkers();
-                data.points.forEach(p => createMarker(p.x, p.y, p.label));
-                updateMsg("Sessione caricata!", "white");
-            };
-            reader.readAsText(file);
         };
     </script>
 </body>
