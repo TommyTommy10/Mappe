@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoMaster Pro - Quiz Interattivo</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: #e5e7eb;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--dark);
+            padding-bottom: 50px;
+        }
+
+        /* Banner Superiore */
+        #top-banner {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            background: var(--dark);
+            color: white;
+            padding: 15px 0;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        #status-msg { font-size: 1.2rem; font-weight: bold; min-height: 1.6em; padding: 0 20px; }
+        #stats { font-size: 0.9rem; color: #cbd5e1; margin-top: 5px; }
+
+        .container-ui {
+            background: white;
+            width: 1000px;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        .button-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        button {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+
+        .btn-blue { background: var(--primary); color: white; }
+        .btn-green { background: var(--success); color: white; }
+        .btn-purple { background: #8b5cf6; color: white; }
+        .btn-black { background: var(--dark); color: white; }
+        .btn-red { background: var(--danger); color: white; }
+        .btn-outline { background: white; border: 2px solid var(--secondary); color: var(--secondary); }
+
+        /* Area Mappa */
+        #map-viewport {
+            position: relative;
+            width: 1000px;
+            background: #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 4px solid white;
+            box-shadow: 0 0 0 2px var(--secondary);
+            margin-top: 10px;
+        }
+
+        #map-img { width: 100%; display: block; image-rendering: auto; }
+
+        .dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--primary);
+            border: 1px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .dot.quiz-mode { background: #94a3b8; }
+        .dot.target-active { background: var(--warning); box-shadow: 0 0 15px var(--warning); transform: translate(-50%, -50%) scale(2); }
+        .dot.correct { background: var(--success) !important; border-color: white; }
+        .dot.wrong { background: var(--danger) !important; border-color: white; }
+
+        #input-area {
+            margin-top: 15px;
+            display: none;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 250px;
+            outline: none;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="top-banner">
+        <div id="status-msg">GeoMaster Pro: Carica una mappa o un template</div>
+        <div id="stats" class="hidden">Punteggio: 0/0 | Tempo: 0s</div>
+    </div>
+
+    <div class="container-ui">
+        <div class="button-group">
+            <input type="file" id="file-map" accept="image/*" class="hidden">
+            <button class="btn-outline" onclick="document.getElementById('file-map').click()">📁 Carica Immagine</button>
+            <button class="btn-outline" id="btn-template">✨ Carica Template (JSON)</button>
+            
+            <button class="btn-black hidden action-btn" id="btn-save">💾 Salva Sessione</button>
+            <input type="file" id="file-session" accept=".json" class="hidden">
+            <button class="btn-outline action-btn hidden" onclick="document.getElementById('file-session').click()">📂 Apri Sessione</button>
+            
+            <button class="btn-blue hidden action-btn" id="btn-quiz-click">📍 Quiz: Clicca</button>
+            <button class="btn-purple hidden action-btn" id="btn-quiz-write">✍️ Quiz: Scrivi</button>
+            <button class="btn-red" onclick="location.reload()">🔄 Reset</button>
+        </div>
+
+        <div id="input-area">
+            <input type="text" id="quiz-input" placeholder="Scrivi il nome del punto...">
+            <button class="btn-green" id="btn-submit-answer">Invia</button>
+        </div>
+    </div>
+
+    <div id="map-viewport" class="hidden">
+        <img id="map-img" src="">
+    </div>
+
+    <script>
+        let markers = [];
+        let isQuiz = false;
+        let quizModeType = '';
+        let currentTarget = null;
+        let score = 0;
+        let totalAsked = 0;
+        let timerInterval;
+        let startTime;
+
+        const el = {
+            mapCont: document.getElementById('map-viewport'),
+            mapImg: document.getElementById('map-img'),
+            msg: document.getElementById('status-msg'),
+            stats: document.getElementById('stats'),
+            inputArea: document.getElementById('input-area'),
+            quizInput: document.getElementById('quiz-input'),
+            btns: document.querySelectorAll('.action-btn')
+        };
+
+        // --- CARICAMENTO ---
+        document.getElementById('file-map').onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    el.mapImg.src = ev.target.result;
+                    initView();
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        // Caricamento Template Esterno
+        document.getElementById('btn-template').onclick = () => {
+            fetch('template.json')
+                .then(response => {
+                    if (!response.ok) throw new Error("File template.json non trovato");
+                    return response.json();
+                })
+                .then(data => {
+                    el.mapImg.src = data.image;
+                    initView();
+                    clearMarkers();
+                    data.points.forEach(p => createMarker(p.x, p.y, p.label));
+                    updateMsg("Template caricato con successo!", "white");
+                })
+                .catch(err => {
+                    updateMsg("Errore: template.json non trovato nella cartella repository.", "#ef4444");
+                });
+        };
+
+        function initView() {
+            el.mapCont.classList.remove('hidden');
+            el.btns.forEach(b => b.classList.remove('hidden'));
+            el.msg.innerText = "Editor: Clicca sulla mappa per aggiungere o eliminare punti.";
+            isQuiz = false;
+        }
+
+        function clearMarkers() {
+            markers.forEach(m => m.el.remove());
+            markers = [];
+        }
+
+        // --- GESTIONE PUNTI ---
+        el.mapCont.onclick = (e) => {
+            if (isQuiz) return;
+            const rect = el.mapCont.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            createMarker(x, y);
+        };
+
+        function createMarker(x, y, name = null) {
+            let label = name;
+            if (label === null) {
+                label = prompt("Inserisci il nome del luogo:");
+                if (label === null || label.trim() === "") return;
+                label = label.trim();
+            }
+
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.style.left = x + "%";
+            dot.style.top = y + "%";
+            
+            const obj = {
+                el: dot,
+                x: x,
+                y: y,
+                label: label,
+                name: label.toLowerCase(),
+                done: false
+            };
+
+            dot.onclick = (e) => {
+                e.stopPropagation();
+                if (isQuiz) {
+                    if (quizModeType === 'click') checkClick(obj);
+                } else {
+                    if(confirm(`Vuoi eliminare "${obj.label}"?`)) {
+                        dot.remove();
+                        markers = markers.filter(m => m !== obj);
+                    }
+                }
+            };
+
+            markers.push(obj);
+            el.mapCont.appendChild(dot);
+        }
+
+        // --- LOGICA QUIZ (MODALITÀ VERIFICA) ---
+        document.getElementById('btn-quiz-click').onclick = () => startQuiz('click');
+        document.getElementById('btn-quiz-write').onclick = () => startQuiz('write');
+
+        function startQuiz(type) {
+            if (markers.length === 0) return;
+            isQuiz = true;
+            quizModeType = type;
+            score = 0;
+            totalAsked = 0;
+            markers.forEach(m => {
+                m.done = false;
+                m.el.className = 'dot quiz-mode';
+                m.el.classList.remove('target-active', 'correct', 'wrong');
+            });
+            
+            el.stats.classList.remove('hidden');
+            el.inputArea.style.display = (type === 'write') ? 'flex' : 'none';
+            
+            updateStats();
+            startTimer();
+            nextQuestion();
+        }
+
+        function nextQuestion() {
+            const available = markers.filter(m => !m.done);
+            if (available.length === 0) return endQuiz();
+
+            currentTarget = available[Math.floor(Math.random() * available.length)];
+            
+            if (quizModeType === 'click') {
+                updateMsg(`Trova sulla mappa: ${currentTarget.label}`, "#60a5fa");
+            } else {
+                updateMsg(`Come si chiama il punto evidenziato?`, "#fbbf24");
+                markers.forEach(m => m.el.classList.remove('target-active'));
+                currentTarget.el.classList.add('target-active');
+                el.quizInput.value = "";
+                el.quizInput.focus();
+            }
+        }
+
+        function checkClick(clickedObj) {
+            if (clickedObj.done) return;
+            totalAsked++;
+            
+            if (clickedObj === currentTarget) {
+                score++;
+                clickedObj.el.className = 'dot correct';
+                updateMsg("Corretto!", "#10b981");
+            } else {
+                // In modalità verifica, se sbagli quello cercato viene segnato come errore
+                currentTarget.el.className = 'dot wrong';
+                updateMsg(`Errore! Hai cliccato il punto sbagliato.`, "#ef4444");
+            }
+            
+            currentTarget.done = true;
+            updateStats();
+            setTimeout(nextQuestion, 1200);
+        }
+
+        document.getElementById('btn-submit-answer').onclick = checkWrite;
+        el.quizInput.onkeyup = (e) => { if(e.key === "Enter") checkWrite(); };
+
+        function checkWrite() {
+            const ans = el.quizInput.value.toLowerCase().trim();
+            if (ans === "") return;
+
+            totalAsked++;
+            currentTarget.done = true;
+            currentTarget.el.classList.remove('target-active');
+
+            if (ans === currentTarget.name) {
+                score++;
+                currentTarget.el.className = 'dot correct';
+                updateMsg("Esatto!", "#10b981");
+            } else {
+                currentTarget.el.className = 'dot wrong';
+                updateMsg(`Sbagliato! Era: ${currentTarget.label}`, "#ef4444");
+            }
+            updateStats();
+            setTimeout(nextQuestion, 1500);
+        }
+
+        // --- FUNZIONI DI SUPPORTO ---
+        function updateMsg(txt, color) {
+            el.msg.innerText = txt;
+            el.msg.style.color = color || "white";
+        }
+
+        function startTimer() {
+            startTime = Date.now();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - startTime) / 1000);
+                updateStats(sec);
+            }, 1000);
+        }
+
+        function updateStats(sec = 0) {
+            el.stats.innerText = `Punteggio: ${score}/${totalAsked} | Tempo: ${sec}s`;
+        }
+
+        function endQuiz() {
+            clearInterval(timerInterval);
+            const finalSec = Math.floor((Date.now() - startTime) / 1000);
+            isQuiz = false;
+            el.inputArea.style.display = 'none';
+            updateMsg(`Quiz Completato! Voto: ${score}/${markers.length} | Tempo: ${finalSec}s`, "white");
+        }
+
+        // --- SALVATAGGIO / APERTURA SESSIONE (PNG + JSON INSIEME) ---
+        document.getElementById('btn-save').onclick = () => {
+            const sessionData = {
+                image: el.mapImg.src,
+                points: markers.map(m => ({ x: m.x, y: m.y, label: m.label }))
+            };
+            const blob = new Blob([JSON.stringify(sessionData)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "sessione_mappa.json";
+            a.click();
+        };
+
+        document.getElementById('file-session').onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const data = JSON.parse(ev.target.result);
+                el.mapImg.src = data.image;
+                initView();
+                clearMarkers();
+                data.points.forEach(p => createMarker(p.x, p.y, p.label));
+                updateMsg("Sessione caricata!", "white");
+            };
+            reader.readAsText(file);
+        };
+    </script>
+</body>
+</html>
