@@ -105,7 +105,7 @@
             display: none;
             position: absolute;
             background-color: white;
-            min-width: 250px;
+            min-width: 280px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             padding: 12px 0;
             z-index: 1;
@@ -120,24 +120,38 @@
             display: block;
         }
 
-        .dropdown-content a {
-            color: var(--dark);
+        .template-item {
             padding: 12px 20px;
             text-decoration: none;
             display: block;
             cursor: pointer;
             transition: background 0.2s;
             font-weight: 500;
+            border-bottom: 1px solid #f0f0f0;
         }
 
-        .dropdown-content a:hover {
+        .template-item:hover {
             background-color: var(--primary);
             color: white;
         }
 
-        .dropdown-content .separator {
-            border-top: 1px solid #ddd;
-            margin: 8px 0;
+        .template-item-title {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .template-item:hover .template-item-title {
+            color: white;
+        }
+
+        .template-item-desc {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-top: 3px;
+        }
+
+        .template-item:hover .template-item-desc {
+            color: rgba(255,255,255,0.8);
         }
 
         /* Area Mappa */
@@ -261,9 +275,7 @@
                     populateTemplateDropdown();
                 })
                 .catch(() => {
-                    // Se templates.json non esiste, carica solo template.json come fallback
-                    availableTemplates = [{ name: 'Template Provincia', file: 'template.json' }]; [{ name: 'Template Frazioni', file: 'sessione_mappa.json' }];
-                    populateTemplateDropdown();
+                    updateMsg("Errore: templates.json non trovato nel repository", "#ef4444");
                 });
         }
 
@@ -271,13 +283,17 @@
             el.dropdownContent.innerHTML = '';
             
             if (availableTemplates.length === 0) {
-                el.dropdownContent.innerHTML = '<a>Nessun template disponibile</a>';
+                el.dropdownContent.innerHTML = '<div style="padding: 12px 20px; color: #94a3b8;">Nessun template configurato</div>';
                 return;
             }
 
-            availableTemplates.forEach((template, index) => {
-                const link = document.createElement('a');
-                link.textContent = template.name;
+            availableTemplates.forEach((template) => {
+                const link = document.createElement('div');
+                link.className = 'template-item';
+                link.innerHTML = `
+                    <div class="template-item-title">${template.name}</div>
+                    <div class="template-item-desc">${template.description || ''}</div>
+                `;
                 link.onclick = (e) => {
                     e.preventDefault();
                     loadTemplate(template.file);
@@ -285,21 +301,6 @@
                 };
                 el.dropdownContent.appendChild(link);
             });
-
-            // Separatore
-            const sep = document.createElement('div');
-            sep.className = 'separator';
-            el.dropdownContent.appendChild(sep);
-
-            // Opzione per caricare template personalizzato
-            const customLink = document.createElement('a');
-            customLink.textContent = '➕ Carica Template Personalizzato';
-            customLink.onclick = (e) => {
-                e.preventDefault();
-                document.getElementById('file-custom-template').click();
-                toggleDropdown(false);
-            };
-            el.dropdownContent.appendChild(customLink);
         }
 
         function toggleDropdown(show = null) {
@@ -332,35 +333,12 @@
                 })
                 .then(data => {
                     loadFromJSON(data);
-                    updateMsg(`Template "${filename}" caricato con successo!`, "white");
+                    updateMsg(`Template caricato con successo!`, "white");
                 })
                 .catch(err => {
-                    updateMsg(`Errore: ${filename} non trovato.`, "#ef4444");
+                    updateMsg(`Errore: ${filename} non trovato nel repository.`, "#ef4444");
                 });
         }
-
-        // Input per template personalizzato
-        const customInput = document.createElement('input');
-        customInput.type = 'file';
-        customInput.id = 'file-custom-template';
-        customInput.accept = '.json';
-        customInput.className = 'hidden';
-        customInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                try {
-                    const data = JSON.parse(ev.target.result);
-                    loadFromJSON(data);
-                    updateMsg("Template personalizzato caricato!", "white");
-                } catch(err) {
-                    updateMsg("Errore nel formato del file JSON.", "#ef4444");
-                }
-            };
-            reader.readAsText(file);
-        };
-        document.body.appendChild(customInput);
 
         // --- CARICAMENTO IMMAGINE SINGOLA ---
         document.getElementById('file-map').onchange = (e) => {
