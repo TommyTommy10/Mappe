@@ -1,0 +1,14 @@
+{
+  "templates": [
+    {
+      "name": "Template Provincia",
+      "file": "template.json",
+      "description": "Mappa con province e confini geografici"
+    },
+    {
+      "name": "Template Frazioni",
+      "file": "sessione_mappa.json",
+      "description": "Mappa con frazioni e suddivisioni territoriali"
+    }
+  ]
+}
