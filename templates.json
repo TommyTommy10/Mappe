@@ -3,12 +3,17 @@
     {
       "name": "Template Provincia",
       "file": "template.json",
-      "description": "Mappa con province e confini geografici"
+      "description": "Mappa con province"
     },
     {
       "name": "Template Frazioni",
       "file": "sessione_mappa.json",
-      "description": "Mappa con frazioni e suddivisioni territoriali"
+      "description": "Mappa con frazioni"
+    },
+    {
+      "name": "Template Vie di Correggio",
+      "file": "sessione_mappa(1).json",
+      "description": "Mappa con vie"
     }
   ]
 }
